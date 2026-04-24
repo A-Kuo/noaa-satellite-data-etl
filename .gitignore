@@ -1,0 +1,34 @@
+# Environment
+.env
+.env.local
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+
+# Data
+data/
+*.tif
+*.tiff
+*.nc
+*.hdf5
+*.csv
+*.parquet
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Agent/Claude planning files
+AGENT.md
+claude-prompt.md
+
+# Logs
+*.log
+
+# Large files
+*.tar.gz
+*.zip
