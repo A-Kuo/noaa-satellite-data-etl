@@ -1,0 +1,5 @@
+# Extra packages for the Airflow image (installed on top of apache/airflow:2.9.0)
+apache-airflow-providers-postgres>=5.10
+apache-airflow-providers-apache-spark>=4.5
+dbt-postgres>=1.8
+noaa-etl @ file:///opt/noaa-etl

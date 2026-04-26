@@ -1,0 +1,72 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!--
+  Tableau Data Source — NOAA Coverage Statistics
+  Target table: reporting.rpt_coverage_tableau  (populated by dbt)
+
+  To connect:
+  1. Open Tableau Desktop → Connect → More → PostgreSQL
+  2. Fill in your host/port/db/user from .env
+  3. Drag-and-drop this .tds file onto the Tableau start page to use
+     the pre-configured calculated fields and spatial setup below.
+-->
+<datasource name="NOAA Coverage Statistics" version="18.1"
+            xmlns:user="http://www.tableausoftware.com/xml/user">
+
+  <connection class="postgres" dbname="noaa_dw" port="5432"
+              schema="reporting" server="localhost"
+              tablename="rpt_coverage_tableau" username="postgres">
+    <relation name="rpt_coverage_tableau" table="[reporting].[rpt_coverage_tableau]"
+              type="table" />
+  </connection>
+
+  <aliases enabled="yes" />
+
+  <!-- ------------------------------------------------------------------ -->
+  <!-- Dimensions                                                           -->
+  <!-- ------------------------------------------------------------------ -->
+  <column datatype="string"  name="[event_name]"   role="dimension" type="nominal" />
+  <column datatype="date"    name="[stat_date]"     role="dimension" type="ordinal" />
+  <column datatype="string"  name="[year_month]"    role="dimension" type="nominal" />
+  <column datatype="integer" name="[year]"          role="dimension" type="ordinal" />
+  <column datatype="integer" name="[month]"         role="dimension" type="ordinal" />
+  <column datatype="integer" name="[quarter]"       role="dimension" type="ordinal" />
+
+  <!-- Spatial point (centroid) — enables Map worksheets in Tableau -->
+  <column datatype="spatial" name="[Coverage Centroid]" role="dimension" type="nominal">
+    <calculation class="tableau" formula="MAKEPOINT([coverage_centroid_lat],[coverage_centroid_lon])" />
+  </column>
+
+  <!-- ------------------------------------------------------------------ -->
+  <!-- Measures                                                             -->
+  <!-- ------------------------------------------------------------------ -->
+  <column datatype="integer" name="[acquisition_count]"     role="measure" type="quantitative"
+          default-format="n0" />
+  <column datatype="integer" name="[cumulative_acquisitions]" role="measure" type="quantitative"
+          default-format="n0" />
+  <column datatype="real"    name="[avg_resolution_cm]"     role="measure" type="quantitative"
+          default-format="#,##0.00" />
+  <column datatype="real"    name="[total_area_km2]"        role="measure" type="quantitative"
+          default-format="#,##0.0" />
+
+  <!-- ------------------------------------------------------------------ -->
+  <!-- Calculated fields                                                    -->
+  <!-- ------------------------------------------------------------------ -->
+
+  <!-- Coverage density: acquisitions per 1000 km² -->
+  <column caption="Acquisitions per 1000 km²" datatype="real"
+          name="[Acquisition Density]" role="measure" type="quantitative">
+    <calculation class="tableau"
+                 formula="[acquisition_count] / NULLIF([total_area_km2], 0) * 1000" />
+  </column>
+
+  <!-- Resolution quality label -->
+  <column caption="Resolution Quality" datatype="string"
+          name="[Resolution Quality]" role="dimension" type="nominal">
+    <calculation class="tableau"
+                 formula="IF [avg_resolution_cm] &lt;= 15 THEN &#39;Ultra-High (&lt;=15cm)&#39;
+ELSEIF [avg_resolution_cm] &lt;= 30 THEN &#39;High (16–30cm)&#39;
+ELSE &#39;Standard (&gt;30cm)&#39;
+END" />
+  </column>
+
+</datasource>

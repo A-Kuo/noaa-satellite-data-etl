@@ -1,4 +1,26 @@
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-meta/airflow
+  AIRFLOW__CORE__FERNET_KEY: ""
+  AIRFLOW__WEBSERVER__SECRET_KEY: "change-me-in-production"
+  # NOAA warehouse connection (also registered via Airflow UI / CLI)
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: noaa_dw
+  DB_USER: postgres
+  DB_PASSWORD: postgres
+
+x-airflow-volumes: &airflow-volumes
+  - ./airflow/dags:/opt/airflow/dags:ro
+  - ./airflow/plugins:/opt/airflow/plugins:ro
+  - ./dbt:/opt/airflow/dbt:ro
+  - airflow-logs:/opt/airflow/logs
+
 services:
+  # ---------------------------------------------------------------------------
+  # PostGIS — NOAA data warehouse
+  # ---------------------------------------------------------------------------
   postgres:
     image: postgis/postgis:16-3.4-alpine
     environment:
@@ -16,5 +38,119 @@ services:
       timeout: 5s
       retries: 5
 
+  # ---------------------------------------------------------------------------
+  # Separate Postgres instance for Airflow metadata (keeps DW clean)
+  # ---------------------------------------------------------------------------
+  postgres-meta:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - airflow-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Airflow — initialise DB and create default admin user
+  # ---------------------------------------------------------------------------
+  airflow-init:
+    build:
+      context: .
+      dockerfile: docker/airflow.Dockerfile
+    environment:
+      <<: *airflow-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+    volumes: *airflow-volumes
+    depends_on:
+      postgres-meta:
+        condition: service_healthy
+    command: version
+    restart: "no"
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: docker/airflow.Dockerfile
+    environment:
+      <<: *airflow-env
+    volumes: *airflow-volumes
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres-meta:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    command: webserver
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: docker/airflow.Dockerfile
+    environment:
+      <<: *airflow-env
+    volumes: *airflow-volumes
+    depends_on:
+      postgres-meta:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    command: scheduler
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Spark — standalone cluster (master + one worker)
+  # ---------------------------------------------------------------------------
+  spark-master:
+    build:
+      context: .
+      dockerfile: docker/spark.Dockerfile
+    environment:
+      SPARK_MODE: master
+      SPARK_MASTER_HOST: spark-master
+      SPARK_MASTER_PORT: "7077"
+      SPARK_MASTER_WEBUI_PORT: "8081"
+    ports:
+      - "7077:7077"
+      - "8081:8081"
+    volumes:
+      - spark-logs:/opt/spark/logs
+      - ./data:/data
+
+  spark-worker:
+    build:
+      context: .
+      dockerfile: docker/spark.Dockerfile
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: 4G
+      SPARK_WORKER_CORES: "2"
+      SPARK_WORKER_WEBUI_PORT: "8082"
+    ports:
+      - "8082:8082"
+    depends_on:
+      - spark-master
+    volumes:
+      - spark-logs:/opt/spark/logs
+      - ./data:/data
+
 volumes:
   pgdata:
+  airflow-pgdata:
+  airflow-logs:
+  spark-logs:

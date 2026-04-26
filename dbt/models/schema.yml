@@ -64,3 +64,34 @@ models:
           - dbt_utils.accepted_range:
               min_value: 0
               inclusive: false
+
+  - name: mart_ml_features
+    description: "ML-ready feature table: engineered spatial, temporal, and event-level features per acquisition"
+    columns:
+      - name: acquisition_id
+        tests: [unique, not_null]
+      - name: footprint_area_km2
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+      - name: centroid_lon
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: -180
+              max_value: 180
+      - name: centroid_lat
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: -90
+              max_value: 90
+
+  - name: rpt_coverage_tableau
+    description: "Flat denormalised table for direct Tableau connection — geometry serialised as WKT"
+    columns:
+      - name: event_name
+        tests: [not_null]
+      - name: stat_date
+        tests: [not_null]
+      - name: coverage_wkt
+        tests: [not_null]
