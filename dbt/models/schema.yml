@@ -1,0 +1,66 @@
+version: 2
+
+sources:
+  - name: raw
+    description: "Raw tables populated by the Python ETL pipeline"
+    schema: public
+    tables:
+      - name: noaa_acquisitions
+        description: "Raw acquisition metadata ingested from the NOAA catalog"
+        columns:
+          - name: acquisition_id
+            description: "Unique identifier from NOAA"
+            tests:
+              - unique
+              - not_null
+          - name: event_name
+            tests: [not_null]
+          - name: acquisition_date
+            tests: [not_null]
+          - name: resolution_cm
+            tests:
+              - not_null
+              - dbt_utils.accepted_range:
+                  min_value: 0
+                  inclusive: false
+          - name: footprint
+            tests: [not_null]
+          - name: download_url
+            tests: [not_null]
+
+models:
+  - name: stg_noaa_acquisitions
+    description: "Staging view — typed and cleaned acquisition records"
+    columns:
+      - name: acquisition_id
+        tests: [unique, not_null]
+      - name: event_name
+        tests: [not_null]
+      - name: sensor
+        tests: [not_null]
+      - name: resolution_cm
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+      - name: footprint_area_km2
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+
+  - name: coverage_statistics
+    description: "Daily per-event coverage aggregations with cumulative running totals"
+    columns:
+      - name: stat_id
+        tests: [unique, not_null]
+      - name: event_name
+        tests: [not_null]
+      - name: stat_date
+        tests: [not_null]
+      - name: acquisition_count
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
