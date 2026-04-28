@@ -1,0 +1,59 @@
+groups:
+  - name: noaa_pipeline
+    rules:
+
+      # API is returning errors
+      - alert: APIHighErrorRate
+        expr: |
+          rate(http_requests_total{job="noaa-api", status=~"5.."}[5m])
+          / rate(http_requests_total{job="noaa-api"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "NOAA API error rate above 5%"
+          description: "{{ $value | humanizePercentage }} of requests are returning 5xx errors."
+
+      # API p95 latency is high
+      - alert: APIHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{job="noaa-api"}[5m])
+          ) > 2.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "NOAA API p95 latency above 2s"
+          description: "p95 latency is {{ $value | humanizeDuration }}."
+
+      # Postgres connection pool exhausted
+      - alert: PostgresConnectionsHigh
+        expr: pg_stat_activity_count > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connections approaching limit"
+          description: "{{ $value }} active connections."
+
+      # No acquisitions ingested in the past 25 hours (missed daily run)
+      - alert: NoNewAcquisitions
+        expr: |
+          (time() - noaa_etl_last_ingest_timestamp_seconds) > 90000
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No acquisitions ingested in 25+ hours"
+          description: "Check the Airflow noaa_ingest DAG for failures."
+
+      # Airflow DAG failure (requires statsd exporter or Airflow Prometheus plugin)
+      - alert: AirflowDAGFailed
+        expr: airflow_dag_run_failed_total > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Airflow DAG run failed"
+          description: "DAG {{ $labels.dag_id }} has a failed run."

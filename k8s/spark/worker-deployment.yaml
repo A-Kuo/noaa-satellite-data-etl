@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-worker
+spec:
+  replicas: 2   # scale horizontally for larger jobs
+  selector:
+    matchLabels:
+      app: spark
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: spark
+        component: worker
+    spec:
+      serviceAccountName: noaa-etl-sa
+      containers:
+        - name: spark-worker
+          image: ECR_REGISTRY/noaa-etl-spark:IMAGE_TAG
+          env:
+            - name: SPARK_MODE
+              value: worker
+            - name: SPARK_MASTER_URL
+              value: spark://spark-master:7077
+            - name: SPARK_WORKER_MEMORY
+              value: "6G"
+            - name: SPARK_WORKER_CORES
+              value: "2"
+          resources:
+            requests:
+              memory: "6Gi"
+              cpu: "2"
+            limits:
+              memory: "8Gi"
+              cpu: "4"

@@ -1,0 +1,20 @@
+# Requires kube-prometheus-stack (or the Prometheus Operator) in the cluster.
+#
+# Install:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: noaa-api
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: noaa-api
+  endpoints:
+    - port: "80"
+      path: /metrics
+      interval: 15s
